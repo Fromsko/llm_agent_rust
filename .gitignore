@@ -1,0 +1,37 @@
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+go.work
+go.work.sum
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Environment
+.env
+.env.local
+*.local
+config.json
+
+# Rust workspace outputs
+rust_workspace/*/target/
+rust_workspace/*/.experience/
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
