@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"rust_agent_v2/agent"
@@ -45,11 +46,15 @@ func main() {
 	os.MkdirAll(cfg.Workspace.RootDir, 0755)
 
 	// 创建模型
-	m := model.NewZhipuModel(cfg.API.Model,
+	modelOpts := []model.ZhipuOption{
 		model.ZhipuWithAPIKey(cfg.API.ZhipuAPIKey),
-		model.ZhipuWithBaseURL(cfg.API.ZhipuBaseURL),
 		model.ZhipuWithConcurrency(cfg.API.Concurrency),
-	)
+	}
+	// 只有当 baseURL 不为空时才设置，避免覆盖默认值
+	if cfg.API.ZhipuBaseURL != "" {
+		modelOpts = append(modelOpts, model.ZhipuWithBaseURL(cfg.API.ZhipuBaseURL))
+	}
+	m := model.NewZhipuModel(cfg.API.Model, modelOpts...)
 
 	// 创建高级工具注册表
 	tools := tool.CreateAdvancedRegistry()
@@ -250,14 +255,15 @@ func runInteractive(ctx context.Context, cfg *config.Config, m model.Model, tool
 	fmt.Println("🦀 Rust Agent v2 - 交互模式 (监督者 + 经验学习)")
 	fmt.Println("============================================================")
 	fmt.Println("命令:")
-	fmt.Println("  /create <描述>  - 监督者模式创建项目（带经验学习）")
-	fmt.Println("  /direct <描述>  - 直接编码模式（不带监督）")
-	fmt.Println("  /fix <项目名>   - 自主修复项目")
-	fmt.Println("  /search <关键词> - 搜索 crates.io")
-	fmt.Println("  /list           - 列出已创建的项目")
-	fmt.Println("  /run <项目名>   - 运行项目")
-	fmt.Println("  /exp            - 查看经验库")
-	fmt.Println("  /quit           - 退出")
+	fmt.Println("  /create <描述>      - 监督者模式创建项目（带经验学习）")
+	fmt.Println("  /interactive <描述> - 交互式编码（ReAct + 多轮对话）")
+	fmt.Println("  /direct <描述>      - 直接编码模式（不带监督）")
+	fmt.Println("  /fix <项目名>       - 自主修复项目")
+	fmt.Println("  /search <关键词>    - 搜索 crates.io")
+	fmt.Println("  /list               - 列出已创建的项目")
+	fmt.Println("  /run <项目名>       - 运行项目")
+	fmt.Println("  /exp                - 查看经验库")
+	fmt.Println("  /quit               - 退出")
 	fmt.Println("============================================================")
 	fmt.Printf("📁 工作目录: %s\n", cfg.Workspace.RootDir)
 	fmt.Println("============================================================")
@@ -283,6 +289,10 @@ func runInteractive(ctx context.Context, cfg *config.Config, m model.Model, tool
 		case strings.HasPrefix(input, "/create "):
 			query := strings.TrimPrefix(input, "/create ")
 			runAutonomousCoder(ctx, m, tools, cfg.Workspace.RootDir, query)
+
+		case strings.HasPrefix(input, "/interactive "):
+			query := strings.TrimPrefix(input, "/interactive ")
+			runInteractiveCoder(ctx, m, tools, cfg.Workspace.RootDir, query)
 
 		case strings.HasPrefix(input, "/direct "):
 			query := strings.TrimPrefix(input, "/direct ")
@@ -311,6 +321,76 @@ func runInteractive(ctx context.Context, cfg *config.Config, m model.Model, tool
 			fmt.Println("💡 提示: 使用监督者模式创建项目（带经验学习）")
 			runAutonomousCoder(ctx, m, tools, cfg.Workspace.RootDir, input)
 		}
+	}
+}
+
+// runInteractiveCoder 交互式编码模式（ReAct + 多轮对话）
+func runInteractiveCoder(ctx context.Context, m model.Model, tools *tool.Registry, workspace, input string) {
+	fmt.Println("============================================================")
+	fmt.Println("🦀 Rust Agent v2 - 交互式编码模式（ReAct + ask_user）")
+	fmt.Println("============================================================")
+	fmt.Printf("📝 需求: %s\n", input)
+	fmt.Printf("📁 工作目录: %s\n", workspace)
+	fmt.Println("============================================================")
+	fmt.Println("🤖 工作流程:")
+	fmt.Println("   1. 澄清需求 → 2. 选择技术栈 → 3. 实现代码 → 4. 确认完成")
+	fmt.Println("============================================================")
+
+	// 设置用户输入处理器到 ask_user 工具
+	if t, ok := tools.Get("ask_user"); ok {
+		if askTool, ok := t.(*tool.AskUserTool); ok {
+			askTool.SetHandler(func(question string, options []string) (string, error) {
+				fmt.Println()
+				fmt.Printf("🤔 %s\n", question)
+
+				if len(options) > 0 {
+					// 检测是否是 y/n 类型的问题
+					isYesNo := len(options) == 2 &&
+						((options[0] == "y" && options[1] == "n") ||
+							(options[0] == "yes" && options[1] == "no") ||
+							(options[0] == "Y" && options[1] == "N"))
+
+					if isYesNo {
+						fmt.Print("\n请输入 y/n: ")
+					} else {
+						fmt.Println("选项:")
+						for i, opt := range options {
+							fmt.Printf("   %d. %s\n", i+1, opt)
+						}
+						fmt.Print("\n请输入选项编号或直接输入选项: ")
+					}
+				} else {
+					fmt.Print("\n请输入: ")
+				}
+
+				reader := bufio.NewReader(os.Stdin)
+				answer, err := reader.ReadString('\n')
+				if err != nil {
+					return "", err
+				}
+				answer = strings.TrimSpace(answer)
+
+				// 如果输入是数字，转换为选项
+				if idx, err := strconv.Atoi(answer); err == nil && idx > 0 && idx <= len(options) {
+					return options[idx-1], nil
+				}
+
+				// 返回原始输入（支持直接输入 y/n 或选项文本）
+				return answer, nil
+			})
+		}
+	}
+
+	// 创建交互式编码 Agent
+	interactiveCoder := specialized.NewInteractiveCoderAgent(m, tools, workspace)
+	eventChan, err := interactiveCoder.Run(ctx, input)
+	if err != nil {
+		fmt.Printf("❌ 错误: %v\n", err)
+		return
+	}
+
+	for ev := range eventChan {
+		handleEvent(ev)
 	}
 }
 

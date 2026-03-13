@@ -567,5 +567,8 @@ func CreateAdvancedRegistry() *Registry {
 	r.Register(NewCargoTree())
 	r.Register(NewCargoMetadata())
 
+	// 添加 ask_user 工具
+	r.Register(NewAskUserTool())
+
 	return r
 }

@@ -42,9 +42,9 @@ func DefaultConfig() *Config {
 	return &Config{
 		API: APIConfig{
 			ZhipuAPIKey:  "",
-			ZhipuBaseURL: "",
-			Model:        "",
-			Concurrency:  50,
+			ZhipuBaseURL: "https://open.bigmodel.cn/api/paas/v4",
+			Model:        "glm-4-flash",
+			Concurrency:  5,
 		},
 		Agent: AgentConfig{
 			MaxIterations: 10,

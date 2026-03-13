@@ -18,6 +18,8 @@ const (
 	TypeCompletion Type = "completion"
 	TypeProgress   Type = "progress"
 	TypeState      Type = "state"
+	TypeAskUser    Type = "ask_user"
+	TypeUserInput  Type = "user_input"
 )
 
 // Event 事件
@@ -37,6 +39,8 @@ type Event struct {
 	Completion *Completion
 	Progress   *Progress
 	State      map[string]any
+	AskUser    *AskUser
+	UserInput  *UserInput
 }
 
 type Response struct {
@@ -84,6 +88,15 @@ type Progress struct {
 	Message string
 }
 
+type AskUser struct {
+	Question string   `json:"question"`
+	Options  []string `json:"options,omitempty"`
+}
+
+type UserInput struct {
+	Response string `json:"response"`
+}
+
 // EmitEvent 发送事件
 func EmitEvent(ctx context.Context, ch chan<- *Event, event *Event) {
 	if event.Timestamp.IsZero() {
@@ -118,4 +131,12 @@ func NewToolCallEvent(agent, toolName string, args map[string]any) *Event {
 
 func NewMCPCallEvent(agent, server, method string, params map[string]any) *Event {
 	return &Event{Type: TypeMCPCall, AgentName: agent, MCPCall: &MCPCall{Server: server, Method: method, Params: params}}
+}
+
+func NewAskUserEvent(agent, question string, options []string) *Event {
+	return &Event{Type: TypeAskUser, AgentName: agent, AskUser: &AskUser{Question: question, Options: options}}
+}
+
+func NewUserInputEvent(agent, response string) *Event {
+	return &Event{Type: TypeUserInput, AgentName: agent, UserInput: &UserInput{Response: response}}
 }
